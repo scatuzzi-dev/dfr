@@ -89,6 +89,10 @@
   .manage-row .rm:hover{ color: var(--red); }
   .add-row{ display:flex; gap:8px; margin-top: 6px; }
   .add-row input{ flex:1; }
+  .video-panel{ background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .video-empty{ padding: 28px 20px; text-align:center; font-size: 12px; color: var(--text-faint); font-family: var(--mono); line-height: 1.6; }
+  .video-frame{ position: relative; width: 100%; padding-top: 56.25%; background: #000; }
+  .video-frame iframe{ position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 </style>
 </head>
 <body>
@@ -115,6 +119,18 @@
     </div>
     <div class="config-empty" id="configEmptyHint" style="display:none;"><span></span></div>
   </div>
+
+  <section>
+    <div class="sec-label">Transmisión en vivo</div>
+    <div class="video-panel" id="videoPanel">
+      <div class="video-empty" id="videoEmpty">
+        Sin transmisión configurada. Andá a Configuración → "Transmisión en vivo (Castr)" y pegá el ID o la URL del reproductor.
+      </div>
+      <div class="video-frame" id="videoFrame" style="display:none;">
+        <iframe id="videoIframe" src="" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen frameborder="0"></iframe>
+      </div>
+    </div>
+  </section>
 
   <section>
     <div class="sec-label">Incidente</div>
@@ -158,6 +174,13 @@
   <details id="settingsPanel">
     <summary>⚙ Configuración (organizaciones, proyectos, workflows, ubicaciones, base de datos)</summary>
     <div class="details-body">
+
+      <div class="subhead">Transmisión en vivo (Castr)</div>
+      <div class="add-row">
+        <input type="text" id="castrPlayer" placeholder="ID del stream o URL completa (player.castr.com/xxxxx)">
+        <button class="ghost-btn" id="castrSaveBtn" type="button">Guardar</button>
+      </div>
+      <div class="field-hint">En Castr: pestaña "Embed" del stream → copiá el ID o la URL del reproductor. No necesita pasar por YouTube.</div>
 
       <div class="subhead">Conexión a Supabase</div>
       <div class="add-row">
@@ -554,9 +577,39 @@ document.getElementById('dispatchBtn').addEventListener('click', async () => {
   }
 });
 
+function castrUrlFrom(value){
+  const v = value.trim();
+  if (!v) return '';
+  if (v.startsWith('http')) return v;
+  return `https://player.castr.com/${v}`;
+}
+function renderVideo(){
+  const saved = localStorage.getItem('dfr_castr_player') || '';
+  document.getElementById('castrPlayer').value = saved;
+  const url = castrUrlFrom(saved);
+  const empty = document.getElementById('videoEmpty');
+  const frame = document.getElementById('videoFrame');
+  const iframe = document.getElementById('videoIframe');
+  if (url){
+    iframe.src = url;
+    empty.style.display = 'none';
+    frame.style.display = 'block';
+  } else {
+    iframe.src = '';
+    empty.style.display = 'block';
+    frame.style.display = 'none';
+  }
+}
+document.getElementById('castrSaveBtn').addEventListener('click', () => {
+  const val = document.getElementById('castrPlayer').value.trim();
+  localStorage.setItem('dfr_castr_player', val);
+  renderVideo();
+});
+
 (async () => {
   const ok = await initSupabase();
   if (ok) await loadAll();
+  renderVideo();
 })();
 </script>
 </body>
