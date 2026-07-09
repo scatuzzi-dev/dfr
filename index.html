@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Disparador DFR · FlightHub 2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg: #12161B; --panel: #1A2028; --panel-2: #1F2731;
+    --line: #2B3440; --line-strong: #3A4552;
+    --text: #E7EBEF; --text-dim: #8A97A6; --text-faint: #5B6673;
+    --amber: #E8A33D; --amber-dim: #8A6222;
+    --cyan: #4FC3D9; --cyan-dim: #235058;
+    --red: #E5584F; --red-dim: #7A2E2A;
+    --green: #5FC08A; --green-dim: #2C5C40;
+    --mono: 'JetBrains Mono', monospace; --sans: 'Inter', -apple-system, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; background: var(--bg); color: var(--text); font-family: var(--sans); padding: 32px 20px 60px; }
+  .wrap{ max-width: 720px; margin: 0 auto; }
+  .head{ display:flex; align-items:baseline; justify-content:space-between; border-bottom: 1px solid var(--line); padding-bottom: 16px; margin-bottom: 24px; }
+  .head h1{ font-size: 15px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; margin: 0; color: var(--text); }
+  .head .sub{ font-family: var(--mono); font-size: 11px; color: var(--text-faint); }
+  .status-row{ display:flex; align-items:center; gap:8px; margin-bottom: 24px; font-family: var(--mono); font-size: 12px; color: var(--text-dim); }
+  .dot{ width:7px; height:7px; border-radius:50%; background: var(--text-faint); flex-shrink:0; }
+  .dot.ready{ background: var(--cyan); box-shadow: 0 0 0 3px var(--cyan-dim); }
+  .dot.sending{ background: var(--amber); box-shadow: 0 0 0 3px var(--amber-dim); animation: pulse 0.9s infinite; }
+  .dot.ok{ background: var(--green); box-shadow: 0 0 0 3px var(--green-dim); }
+  .dot.err{ background: var(--red); box-shadow: 0 0 0 3px var(--red-dim); }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+  section{ margin-bottom: 26px; }
+  .sec-label{ font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 12px; display:flex; align-items:center; gap:8px; }
+  .sec-label::after{ content:''; flex:1; height:1px; background: var(--line); }
+  .config-panel{ background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; margin-bottom: 24px; }
+  .config-grid{ display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .config-grid .field{ margin-bottom: 0; }
+  .config-empty{ font-size: 12px; color: var(--amber); font-family: var(--mono); display:flex; align-items:center; justify-content:space-between; gap: 10px; margin-top:10px; }
+  details{ background: var(--panel); border: 1px solid var(--line); border-radius: 6px; margin-bottom: 20px; }
+  summary{ padding: 12px 16px; cursor:pointer; font-size: 13px; font-weight: 500; display:flex; align-items:center; justify-content:space-between; list-style:none; color: var(--text-dim); }
+  summary::-webkit-details-marker{ display:none; }
+  summary::after{ content: '▸'; color: var(--text-faint); font-size: 11px; transition: transform 0.15s; }
+  details[open] summary::after{ transform: rotate(90deg); }
+  .details-body{ padding: 4px 16px 16px; }
+  .subhead{ font-size: 12px; font-weight: 500; color: var(--text); margin: 16px 0 8px; }
+  .subhead:first-child{ margin-top: 0; }
+  .field{ margin-bottom: 14px; }
+  .field label{ display:block; font-size: 11px; color: var(--text-dim); margin-bottom: 5px; font-family: var(--mono); }
+  .field-hint{ font-size: 11px; color: var(--text-faint); margin-top: 4px; }
+  input, select, textarea{ width: 100%; background: var(--panel-2); border: 1px solid var(--line); color: var(--text); font-family: var(--mono); font-size: 13px; padding: 9px 10px; border-radius: 4px; outline: none; }
+  input:focus, select:focus, textarea:focus{ border-color: var(--cyan); }
+  input::placeholder, textarea::placeholder{ color: var(--text-faint); font-style: italic; opacity: 1; }
+  textarea{ resize: vertical; min-height: 56px; font-family: var(--sans); }
+  .grid2{ display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .coords-panel{ background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 20px; margin-bottom: 8px; }
+  .level-row{ display:flex; gap:8px; }
+  .level-btn{ flex:1; padding: 10px 0; text-align:center; border: 1px solid var(--line); border-radius: 4px; background: var(--panel-2); color: var(--text-dim); font-family: var(--mono); font-size: 13px; cursor:pointer; user-select:none; }
+  .level-btn.active{ border-color: var(--amber); color: var(--amber); background: rgba(232,163,61,0.08); }
+  .dispatch-btn{ width:100%; padding: 15px 0; background: var(--amber); border: none; border-radius: 6px; color: #1A1204; font-family: var(--sans); font-weight: 600; font-size: 14px; letter-spacing: 0.03em; cursor: pointer; margin-top: 8px; }
+  .dispatch-btn:hover{ background: #F0AE4E; }
+  .dispatch-btn:disabled{ background: var(--line-strong); color: var(--text-faint); cursor: not-allowed; }
+  .ghost-btn{ background: var(--panel-2); border: 1px solid var(--line); color: var(--text-dim); font-family: var(--sans); font-size: 12px; font-weight: 500; padding: 8px 12px; border-radius: 4px; cursor: pointer; width:auto; }
+  .ghost-btn:hover{ border-color: var(--line-strong); color: var(--text); }
+  .resp{ font-family: var(--mono); font-size: 12px; white-space: pre-wrap; word-break: break-word; background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 14px; margin-top: 12px; color: var(--text-dim); display:none; }
+  .resp.show{ display:block; }
+  .resp .code-line{ font-weight: 700; margin-bottom: 6px; }
+  .resp .code-line.ok{ color: var(--green); }
+  .resp .code-line.err{ color: var(--red); }
+  .log{ margin-top: 28px; }
+  .log-item{ display:flex; justify-content:space-between; gap:12px; padding: 9px 0; border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 12px; }
+  .log-item .name{ color: var(--text); }
+  .log-item .meta{ color: var(--text-faint); text-align:right; }
+  .log-empty{ color: var(--text-faint); font-family: var(--mono); font-size: 12px; padding: 8px 0; }
+  .footnote{ font-size: 11px; color: var(--text-faint); margin-top: 24px; line-height: 1.6; }
+  .footnote code{ color: var(--text-dim); }
+  .chip-row{ display:flex; flex-wrap:wrap; gap: 8px; margin-bottom: 10px; }
+  .chip{ display:flex; align-items:center; gap: 6px; padding: 6px 10px; border-radius: 4px; background: var(--panel-2); border: 1px solid var(--line); font-family: var(--mono); font-size: 12px; color: var(--text-dim); cursor:pointer; }
+  .chip.active{ border-color: var(--cyan); color: var(--cyan); }
+  .manage-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; margin-bottom: 6px; font-family: var(--mono); font-size: 12px; }
+  .manage-row .rname{ color: var(--text); }
+  .manage-row .ruuid{ color: var(--text-faint); font-size: 11px; }
+  .manage-row .rm{ color: var(--text-faint); cursor:pointer; font-weight:700; }
+  .manage-row .rm:hover{ color: var(--red); }
+  .add-row{ display:flex; gap:8px; margin-top: 6px; }
+  .add-row input{ flex:1; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="head">
+    <h1>Disparador DFR</h1>
+    <div class="sub">FlightHub 2 · Automated Workflow</div>
+  </div>
+
+  <div class="status-row">
+    <div class="dot ready" id="statusDot"></div>
+    <span id="statusText">Conectando con la base de datos...</span>
+  </div>
+
+  <div class="config-panel">
+    <div class="config-grid">
+      <div class="field"><label>Organización</label><select id="orgSelect"></select></div>
+      <div class="field"><label>Proyecto</label><select id="projectSelect"></select></div>
+      <div class="field"><label>Workflow</label><select id="workflowSelect"></select></div>
+    </div>
+    <div class="config-empty" id="configEmptyHint" style="display:none;"><span></span></div>
+  </div>
+
+  <section>
+    <div class="sec-label">Incidente</div>
+    <div class="field">
+      <label>Nombre del incidente</label>
+      <input type="text" id="incidentName" placeholder="North Perimeter Breach - Camera 23">
+    </div>
+    <div class="coords-panel">
+      <div class="field">
+        <label>Ubicaciones guardadas (hasta 5)</label>
+        <div class="chip-row" id="locationChips"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Latitud (WGS84)</label><input type="text" id="lat" placeholder="37.7749"></div>
+        <div class="field"><label>Longitud (WGS84)</label><input type="text" id="lng" placeholder="-122.4194"></div>
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <label>Nivel de prioridad (controla el despacho automático)</label>
+        <div class="level-row" id="levelRow">
+          <div class="level-btn" data-level="1">1</div>
+          <div class="level-btn" data-level="2">2</div>
+          <div class="level-btn" data-level="3">3</div>
+          <div class="level-btn active" data-level="4">4</div>
+          <div class="level-btn" data-level="5">5</div>
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <label>Descripción de la alarma</label>
+      <textarea id="desc" placeholder="Motion detected; suspect vehicle observed"></textarea>
+    </div>
+    <button class="dispatch-btn" id="dispatchBtn">Dispatch drone</button>
+    <div class="resp" id="respBox"></div>
+  </section>
+
+  <div class="log">
+    <div class="sec-label">Historial de la sesión</div>
+    <div id="logList"><div class="log-empty">Sin despachos todavía.</div></div>
+  </div>
+
+  <details id="settingsPanel">
+    <summary>⚙ Configuración (organizaciones, proyectos, workflows, ubicaciones, base de datos)</summary>
+    <div class="details-body">
+
+      <div class="subhead">Conexión a Supabase</div>
+      <div class="add-row">
+        <input type="text" id="sbUrl" placeholder="https://tuproyecto.supabase.co">
+        <input type="password" id="sbKey" placeholder="anon public key">
+      </div>
+      <button class="ghost-btn" id="sbConnectBtn" style="margin-top:8px;">Conectar</button>
+      <div class="field-hint">Se guarda en este navegador. Usá el proyecto de Supabase que ya tenés — ver <code>supabase_schema.sql</code> (tablas <code>dfr_*</code>, no chocan con tus otras tablas).</div>
+
+      <div class="subhead">Organizaciones</div>
+      <div id="orgList"></div>
+      <div class="add-row">
+        <input type="text" id="newOrgName" placeholder="Nombre de la organización">
+        <input type="text" id="newOrgRegion" placeholder="Región (us/eu)" style="max-width:90px;">
+      </div>
+      <div class="add-row">
+        <input type="password" id="newOrgToken" placeholder="X-User-Token">
+        <input type="text" id="newOrgCreator" placeholder="creator (opcional)">
+      </div>
+      <button class="ghost-btn" id="addOrgBtn" style="margin-top:8px;">+ Guardar organización</button>
+
+      <div class="subhead">Proyectos de la organización seleccionada</div>
+      <div id="projectList"></div>
+      <div class="add-row">
+        <input type="text" id="newProjectName" placeholder="Nombre del proyecto">
+        <input type="text" id="newProjectUuid" placeholder="x-project-uuid">
+      </div>
+      <button class="ghost-btn" id="addProjectBtn" style="margin-top:8px;">+ Guardar proyecto</button>
+
+      <div class="subhead">Workflows del proyecto seleccionado</div>
+      <div id="workflowList"></div>
+      <div class="add-row">
+        <input type="text" id="newWorkflowName" placeholder="Nombre del workflow">
+        <input type="text" id="newWorkflowUuid" placeholder="workflow_uuid">
+      </div>
+      <button class="ghost-btn" id="addWorkflowBtn" style="margin-top:8px;">+ Guardar workflow</button>
+
+      <div class="subhead">Ubicaciones guardadas</div>
+      <div class="field">
+        <label>Pegar desde Google Maps (lat, lng)</label>
+        <input type="text" id="pasteCoords" placeholder="-31.4135, -64.1810">
+        <div class="field-hint">En Google Maps, clic derecho sobre el punto → copiá coordenadas → pegalas acá. <a href="https://www.google.com/maps" target="_blank" rel="noopener" style="color:var(--cyan);">Abrir Google Maps ↗</a></div>
+      </div>
+      <div class="add-row">
+        <input type="text" id="newLocName" placeholder="Nombre de la ubicación">
+        <input type="text" id="newLocLat" placeholder="Latitud" style="max-width:120px;">
+        <input type="text" id="newLocLng" placeholder="Longitud" style="max-width:120px;">
+      </div>
+      <button class="ghost-btn" id="saveLocBtn" style="margin-top:8px;">+ Guardar ubicación (máx 5)</button>
+
+    </div>
+  </details>
+
+  <div class="footnote">
+    Organización, proyecto, workflow y ubicaciones se guardan en las tablas <code>dfr_*</code> de tu proyecto de Supabase (compartido con tus otras apps, sin cruzarse con sus tablas) — visibles desde cualquier navegador que se conecte con la misma URL y anon key. El despacho se envía a <code>/dispatch</code>, redirigido por Netlify a una función que reenvía a <code>https://es-flight-api-{región}.djigate.com/openapi/v0.1/workflow</code>, evitando el bloqueo CORS del navegador. trigger_type va fijo en 0. Códigos de respuesta: 200 OK, 400 solicitud incorrecta, 401/403 no autorizado, 245008 workflow no coincide con el proyecto, 500 error del servidor.
+  </div>
+
+</div>
+
+<script>
+let sb = null;
+let selectedLevel = 4;
+let data = { orgs: [], projects: [], workflows: [], locations: [] };
+let activeOrgId = localStorage.getItem('dfr_active_org') || null;
+let activeProjectId = localStorage.getItem('dfr_active_project') || null;
+let activeWorkflowId = localStorage.getItem('dfr_active_workflow') || null;
+const log = [];
+
+function currentOrg(){ return data.orgs.find(o => o.id === activeOrgId); }
+function currentProject(){ return data.projects.find(p => p.id === activeProjectId); }
+function currentWorkflow(){ return data.workflows.find(w => w.id === activeWorkflowId); }
+
+function setStatus(cls, text){
+  document.getElementById('statusDot').className = 'dot ' + cls;
+  document.getElementById('statusText').textContent = text;
+}
+function clearStaleStatus(){
+  setStatus('ready', 'Listo para despachar');
+  const respBox = document.getElementById('respBox');
+  respBox.className = 'resp';
+  respBox.innerHTML = '';
+}
+
+async function initSupabase(){
+  const DEFAULT_SB_URL = 'https://udsgozlwztvxhmprhsky.supabase.co';
+  const DEFAULT_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVkc2dvemx3enR2eGhtcHJoc2t5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMwMzY5NzcsImV4cCI6MjA5ODYxMjk3N30.t-ZSKBLAKKvin7Y8LR-FDA9CyN5YQngYFQyvKre9OpA';
+  let url = localStorage.getItem('dfr_sb_url');
+  let key = localStorage.getItem('dfr_sb_key');
+  if (!url || !key){
+    url = DEFAULT_SB_URL;
+    key = DEFAULT_SB_KEY;
+    localStorage.setItem('dfr_sb_url', url);
+    localStorage.setItem('dfr_sb_key', key);
+  }
+  document.getElementById('sbUrl').value = url;
+  document.getElementById('sbKey').value = key;
+  if (!url || !key){
+    setStatus('err', 'Falta configurar Supabase (ver Configuración)');
+    document.getElementById('settingsPanel').open = true;
+    return false;
+  }
+  try{
+    sb = window.supabase.createClient(url, key);
+    return true;
+  }catch(e){
+    setStatus('err', 'URL o key de Supabase inválida');
+    return false;
+  }
+}
+
+document.getElementById('sbConnectBtn').addEventListener('click', async () => {
+  const url = document.getElementById('sbUrl').value.trim().replace(/\/$/, '');
+  const key = document.getElementById('sbKey').value.trim();
+  if (!url || !key){ alert('Completá URL y anon key de Supabase.'); return; }
+  localStorage.setItem('dfr_sb_url', url);
+  localStorage.setItem('dfr_sb_key', key);
+  const ok = await initSupabase();
+  if (ok){ await loadAll(); }
+});
+
+async function loadAll(){
+  setStatus('sending', 'Cargando datos...');
+  const [orgsRes, projectsRes, workflowsRes, locationsRes] = await Promise.all([
+    sb.from('dfr_organizations').select('*').order('name'),
+    sb.from('dfr_projects').select('*').order('name'),
+    sb.from('dfr_workflows').select('*').order('name'),
+    sb.from('dfr_locations').select('*').order('name'),
+  ]);
+  if (orgsRes.error){ setStatus('err', 'Error leyendo Supabase: ' + orgsRes.error.message); return; }
+  data.orgs = orgsRes.data || [];
+  data.projects = projectsRes.data || [];
+  data.workflows = workflowsRes.data || [];
+  data.locations = locationsRes.data || [];
+  clearStaleStatus();
+  renderSelectors();
+  renderSettingsLists();
+  renderLocations();
+}
+
+function renderSelectors(){
+  const orgSel = document.getElementById('orgSelect');
+  const projSel = document.getElementById('projectSelect');
+  const wfSel = document.getElementById('workflowSelect');
+  const hint = document.getElementById('configEmptyHint');
+
+  orgSel.innerHTML = data.orgs.map(o => `<option value="${o.id}">${o.name} (${o.region})</option>`).join('');
+  if (!data.orgs.find(o => o.id === activeOrgId)) activeOrgId = data.orgs.length ? data.orgs[0].id : null;
+  orgSel.value = activeOrgId || '';
+
+  const projects = data.projects.filter(p => p.org_id === activeOrgId);
+  projSel.innerHTML = projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  if (!projects.find(p => p.id === activeProjectId)) activeProjectId = projects.length ? projects[0].id : null;
+  projSel.value = activeProjectId || '';
+
+  const workflows = data.workflows.filter(w => w.project_id === activeProjectId);
+  wfSel.innerHTML = workflows.map(w => `<option value="${w.id}">${w.name}</option>`).join('');
+  if (!workflows.find(w => w.id === activeWorkflowId)) activeWorkflowId = workflows.length ? workflows[0].id : null;
+  wfSel.value = activeWorkflowId || '';
+
+  orgSel.disabled = data.orgs.length === 0;
+  projSel.disabled = projects.length === 0;
+  wfSel.disabled = workflows.length === 0;
+
+  localStorage.setItem('dfr_active_org', activeOrgId || '');
+  localStorage.setItem('dfr_active_project', activeProjectId || '');
+  localStorage.setItem('dfr_active_workflow', activeWorkflowId || '');
+
+  let missing = [];
+  if (data.orgs.length === 0) missing.push('organización');
+  else if (projects.length === 0) missing.push('proyecto');
+  else if (workflows.length === 0) missing.push('workflow');
+  hint.style.display = missing.length ? 'flex' : 'none';
+  if (missing.length) hint.querySelector('span').textContent = `Falta cargar una ${missing[0]} en Configuración, más abajo.`;
+}
+
+document.getElementById('orgSelect').addEventListener('change', (e) => {
+  activeOrgId = e.target.value; activeProjectId = null; activeWorkflowId = null;
+  renderSelectors(); renderSettingsLists(); clearStaleStatus();
+});
+document.getElementById('projectSelect').addEventListener('change', (e) => {
+  activeProjectId = e.target.value; activeWorkflowId = null;
+  renderSelectors(); renderSettingsLists(); clearStaleStatus();
+});
+document.getElementById('workflowSelect').addEventListener('change', (e) => {
+  activeWorkflowId = e.target.value;
+  localStorage.setItem('dfr_active_workflow', activeWorkflowId || '');
+  clearStaleStatus();
+});
+
+function renderSettingsLists(){
+  document.getElementById('orgList').innerHTML = data.orgs.map(o => `
+    <div class="manage-row">
+      <div><div class="rname">${o.name}</div><div class="ruuid">${o.region} · creator: ${o.creator || '(sin definir)'}</div></div>
+      <span class="rm" data-del-org="${o.id}">×</span>
+    </div>`).join('') || '<div class="field-hint">Sin organizaciones guardadas.</div>';
+
+  const projects = data.projects.filter(p => p.org_id === activeOrgId);
+  document.getElementById('projectList').innerHTML = activeOrgId
+    ? (projects.map(p => `
+      <div class="manage-row">
+        <div><div class="rname">${p.name}</div><div class="ruuid">${p.project_uuid}</div></div>
+        <span class="rm" data-del-project="${p.id}">×</span>
+      </div>`).join('') || '<div class="field-hint">Esta organización todavía no tiene proyectos.</div>')
+    : '<div class="field-hint">Elegí una organización arriba primero.</div>';
+
+  const workflows = data.workflows.filter(w => w.project_id === activeProjectId);
+  document.getElementById('workflowList').innerHTML = activeProjectId
+    ? (workflows.map(w => `
+      <div class="manage-row">
+        <div><div class="rname">${w.name}</div><div class="ruuid">${w.workflow_uuid}</div></div>
+        <span class="rm" data-del-workflow="${w.id}">×</span>
+      </div>`).join('') || '<div class="field-hint">Este proyecto todavía no tiene workflows.</div>')
+    : '<div class="field-hint">Elegí un proyecto arriba primero.</div>';
+}
+
+document.getElementById('orgList').addEventListener('click', async (e) => {
+  const del = e.target.closest('[data-del-org]');
+  if (!del) return;
+  await sb.from('dfr_organizations').delete().eq('id', del.dataset.delOrg);
+  if (activeOrgId === del.dataset.delOrg){ activeOrgId = null; activeProjectId = null; activeWorkflowId = null; }
+  await loadAll();
+});
+document.getElementById('projectList').addEventListener('click', async (e) => {
+  const del = e.target.closest('[data-del-project]');
+  if (!del) return;
+  await sb.from('dfr_projects').delete().eq('id', del.dataset.delProject);
+  if (activeProjectId === del.dataset.delProject){ activeProjectId = null; activeWorkflowId = null; }
+  await loadAll();
+});
+document.getElementById('workflowList').addEventListener('click', async (e) => {
+  const del = e.target.closest('[data-del-workflow]');
+  if (!del) return;
+  await sb.from('dfr_workflows').delete().eq('id', del.dataset.delWorkflow);
+  if (activeWorkflowId === del.dataset.delWorkflow) activeWorkflowId = null;
+  await loadAll();
+});
+
+document.getElementById('addOrgBtn').addEventListener('click', async () => {
+  const name = document.getElementById('newOrgName').value.trim();
+  const region = (document.getElementById('newOrgRegion').value.trim() || 'us').toLowerCase();
+  const token = document.getElementById('newOrgToken').value.trim();
+  const creator = document.getElementById('newOrgCreator').value.trim();
+  if (!name || !token){ alert('Completá nombre y X-User-Token.'); return; }
+  const { data: inserted, error } = await sb.from('dfr_organizations').insert({ name, region, token, creator }).select().single();
+  if (error){ alert('Error guardando: ' + error.message); return; }
+  activeOrgId = inserted.id; activeProjectId = null; activeWorkflowId = null;
+  ['newOrgName','newOrgRegion','newOrgToken','newOrgCreator'].forEach(id => document.getElementById(id).value = '');
+  await loadAll();
+});
+
+document.getElementById('addProjectBtn').addEventListener('click', async () => {
+  if (!activeOrgId){ alert('Elegí una organización arriba primero.'); return; }
+  const name = document.getElementById('newProjectName').value.trim();
+  const uuidVal = document.getElementById('newProjectUuid').value.trim();
+  if (!name || !uuidVal){ alert('Completá nombre y x-project-uuid.'); return; }
+  const { data: inserted, error } = await sb.from('dfr_projects').insert({ org_id: activeOrgId, name, project_uuid: uuidVal }).select().single();
+  if (error){ alert('Error guardando: ' + error.message); return; }
+  activeProjectId = inserted.id; activeWorkflowId = null;
+  ['newProjectName','newProjectUuid'].forEach(id => document.getElementById(id).value = '');
+  await loadAll();
+});
+
+document.getElementById('addWorkflowBtn').addEventListener('click', async () => {
+  if (!activeProjectId){ alert('Elegí un proyecto arriba primero.'); return; }
+  const name = document.getElementById('newWorkflowName').value.trim();
+  const uuidVal = document.getElementById('newWorkflowUuid').value.trim();
+  if (!name || !uuidVal){ alert('Completá nombre y workflow_uuid.'); return; }
+  const { data: inserted, error } = await sb.from('dfr_workflows').insert({ project_id: activeProjectId, name, workflow_uuid: uuidVal }).select().single();
+  if (error){ alert('Error guardando: ' + error.message); return; }
+  activeWorkflowId = inserted.id;
+  ['newWorkflowName','newWorkflowUuid'].forEach(id => document.getElementById(id).value = '');
+  await loadAll();
+});
+
+function renderLocations(){
+  const chips = document.getElementById('locationChips');
+  chips.innerHTML = data.locations.length
+    ? data.locations.map(l => `<div class="chip" data-loc="${l.id}">${l.name}</div>`).join('')
+    : '<div class="field-hint">Sin ubicaciones guardadas — agregá una en Configuración.</div>';
+}
+document.getElementById('locationChips').addEventListener('click', (e) => {
+  const chip = e.target.closest('[data-loc]');
+  if (!chip) return;
+  const loc = data.locations.find(l => l.id === chip.dataset.loc);
+  if (loc){
+    document.getElementById('lat').value = loc.lat;
+    document.getElementById('lng').value = loc.lng;
+    clearStaleStatus();
+  }
+});
+document.getElementById('pasteCoords').addEventListener('change', () => {
+  const raw = document.getElementById('pasteCoords').value.trim();
+  const parts = raw.split(',').map(s => parseFloat(s.trim()));
+  if (parts.length === 2 && !parts.some(isNaN)){
+    document.getElementById('newLocLat').value = parts[0];
+    document.getElementById('newLocLng').value = parts[1];
+  }
+});
+document.getElementById('saveLocBtn').addEventListener('click', async () => {
+  const name = document.getElementById('newLocName').value.trim();
+  const lat = parseFloat(document.getElementById('newLocLat').value);
+  const lng = parseFloat(document.getElementById('newLocLng').value);
+  if (!name || isNaN(lat) || isNaN(lng)){ alert('Completá nombre, latitud y longitud.'); return; }
+  if (data.locations.length >= 5){ alert('Ya hay 5 ubicaciones guardadas. Borrá una para agregar otra.'); return; }
+  const { error } = await sb.from('dfr_locations').insert({ name, lat, lng });
+  if (error){ alert('Error guardando: ' + error.message); return; }
+  ['newLocName','newLocLat','newLocLng','pasteCoords'].forEach(id => document.getElementById(id).value = '');
+  await loadAll();
+});
+
+document.getElementById('levelRow').addEventListener('click', (e) => {
+  const btn = e.target.closest('.level-btn');
+  if (!btn) return;
+  document.querySelectorAll('.level-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedLevel = parseInt(btn.dataset.level, 10);
+});
+['incidentName','lat','lng','desc'].forEach(id => {
+  document.getElementById(id).addEventListener('input', clearStaleStatus);
+});
+
+function renderLog(){
+  const list = document.getElementById('logList');
+  list.innerHTML = log.length
+    ? log.slice().reverse().map(item => `<div class="log-item"><span class="name">${item.name}</span><span class="meta">${item.time} · ${item.result}</span></div>`).join('')
+    : '<div class="log-empty">Sin despachos todavía.</div>';
+}
+
+function meaningFor(code){
+  const map = {
+    200: 'OK — éxito, el procesamiento ha comenzado',
+    400: 'Solicitud incorrecta — verifica el JSON y los campos faltantes',
+    401: 'No autorizado — verifica el token y el project-uuid',
+    403: 'No autorizado — verifica el token y el project-uuid',
+    245008: 'Desajuste — el workflow_uuid no pertenece a ese proyecto',
+    500: 'Error del servidor — reintenta o contacta soporte'
+  };
+  return map[code] || 'Código no documentado en la referencia del curso';
+}
+
+document.getElementById('dispatchBtn').addEventListener('click', async () => {
+  const org = currentOrg();
+  const project = currentProject();
+  const workflow = currentWorkflow();
+  const name = document.getElementById('incidentName').value.trim();
+  const lat = parseFloat(document.getElementById('lat').value);
+  const lng = parseFloat(document.getElementById('lng').value);
+  const desc = document.getElementById('desc').value.trim();
+  const respBox = document.getElementById('respBox');
+  const btn = document.getElementById('dispatchBtn');
+
+  if (!org || !project || !workflow || !name || isNaN(lat) || isNaN(lng)){
+    setStatus('err', 'Faltan campos requeridos');
+    respBox.className = 'resp show';
+    respBox.innerHTML = '<div class="code-line err">Elegí organización, proyecto y workflow arriba, y completá nombre y coordenadas antes de despachar.</div>';
+    return;
+  }
+
+  const url = `/dispatch?region=${org.region}`;
+  const body = {
+    workflow_uuid: workflow.workflow_uuid,
+    trigger_type: 0,
+    name: name,
+    params: { creator: org.creator || '', latitude: lat, longitude: lng, level: selectedLevel, desc }
+  };
+
+  btn.disabled = true;
+  setStatus('sending', 'Enviando disparo...');
+  respBox.className = 'resp show';
+  respBox.innerHTML = '<div class="code-line">Enviando solicitud...</div>';
+
+  try{
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-User-Token': org.token, 'x-project-uuid': project.project_uuid },
+      body: JSON.stringify(body)
+    });
+    const text = await res.text();
+    let parsed;
+    try { parsed = JSON.parse(text); } catch { parsed = text; }
+    const ok = res.status === 200;
+    setStatus(ok ? 'ok' : 'err', ok ? 'Despachado' : `Error ${res.status}`);
+    respBox.innerHTML = `<div class="code-line ${ok ? 'ok' : 'err'}">${res.status} — ${meaningFor(res.status)}</div>` +
+      (typeof parsed === 'object' ? JSON.stringify(parsed, null, 2) : parsed);
+    log.push({ name, time: new Date().toLocaleTimeString(), result: `HTTP ${res.status}` });
+    renderLog();
+  } catch(err){
+    setStatus('err', 'Fallo de red');
+    respBox.innerHTML = `<div class="code-line err">No se pudo completar la solicitud.</div>${err.message}`;
+    log.push({ name, time: new Date().toLocaleTimeString(), result: 'fallo de red' });
+    renderLog();
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+(async () => {
+  const ok = await initSupabase();
+  if (ok) await loadAll();
+})();
+</script>
+</body>
+</html>
