@@ -38,6 +38,17 @@ create table dfr_locations (
   created_at timestamptz default now()
 );
 
+-- Configuracion global de la app (fila unica, id=1).
+-- Por ahora guarda el ID/URL del reproductor de Castr para la
+-- transmision en vivo, compartido entre todos los dispositivos.
+create table dfr_settings (
+  id int primary key default 1,
+  castr_player text,
+  updated_at timestamptz default now()
+);
+
+insert into dfr_settings (id, castr_player) values (1, null);
+
 -- Row Level Security -------------------------------------------------
 -- IMPORTANTE: la clave "anon" de Supabase es pública (va embebida en el
 -- HTML). Sin políticas RLS, cualquiera con esa clave podría leer o
@@ -55,8 +66,10 @@ alter table dfr_organizations enable row level security;
 alter table dfr_projects enable row level security;
 alter table dfr_workflows enable row level security;
 alter table dfr_locations enable row level security;
+alter table dfr_settings enable row level security;
 
 create policy "dfr allow all - organizations" on dfr_organizations for all using (true) with check (true);
 create policy "dfr allow all - projects" on dfr_projects for all using (true) with check (true);
 create policy "dfr allow all - workflows" on dfr_workflows for all using (true) with check (true);
 create policy "dfr allow all - locations" on dfr_locations for all using (true) with check (true);
+create policy "dfr allow all - settings" on dfr_settings for all using (true) with check (true);

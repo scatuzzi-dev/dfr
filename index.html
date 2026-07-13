@@ -578,14 +578,13 @@ document.getElementById('dispatchBtn').addEventListener('click', async () => {
 });
 
 function castrUrlFrom(value){
-  const v = value.trim();
+  const v = (value || '').trim();
   if (!v) return '';
   if (v.startsWith('http')) return v;
   return `https://player.castr.com/${v}`;
 }
-function renderVideo(){
-  const saved = localStorage.getItem('dfr_castr_player') || '';
-  document.getElementById('castrPlayer').value = saved;
+function applyVideoUrl(saved){
+  document.getElementById('castrPlayer').value = saved || '';
   const url = castrUrlFrom(saved);
   const empty = document.getElementById('videoEmpty');
   const frame = document.getElementById('videoFrame');
@@ -600,16 +599,24 @@ function renderVideo(){
     frame.style.display = 'none';
   }
 }
-document.getElementById('castrSaveBtn').addEventListener('click', () => {
+async function loadVideoSetting(){
+  const { data: row, error } = await sb.from('dfr_settings').select('castr_player').eq('id', 1).maybeSingle();
+  if (error){ console.warn('No se pudo leer dfr_settings', error.message); applyVideoUrl(''); return; }
+  applyVideoUrl(row ? row.castr_player : '');
+}
+document.getElementById('castrSaveBtn').addEventListener('click', async () => {
   const val = document.getElementById('castrPlayer').value.trim();
-  localStorage.setItem('dfr_castr_player', val);
-  renderVideo();
+  const { error } = await sb.from('dfr_settings').upsert({ id: 1, castr_player: val, updated_at: new Date().toISOString() });
+  if (error){ alert('Error guardando: ' + error.message); return; }
+  applyVideoUrl(val);
 });
 
 (async () => {
   const ok = await initSupabase();
-  if (ok) await loadAll();
-  renderVideo();
+  if (ok){
+    await loadAll();
+    await loadVideoSetting();
+  }
 })();
 </script>
 </body>
