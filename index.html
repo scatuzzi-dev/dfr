@@ -147,7 +147,9 @@
         <div class="field"><label>Latitud (WGS84)</label><input type="text" id="lat" placeholder="37.7749"></div>
         <div class="field"><label>Longitud (WGS84)</label><input type="text" id="lng" placeholder="-122.4194"></div>
       </div>
-      <div class="field" style="margin-bottom:0;">
+      <button class="ghost-btn" id="useGpsBtn" type="button">📍 Usar mi ubicación actual</button>
+      <div class="field-hint" id="gpsHint" style="margin-top:6px;"></div>
+      <div class="field" style="margin-bottom:0; margin-top:14px;">
         <label>Nivel de prioridad (controla el despacho automático)</label>
         <div class="level-row" id="levelRow">
           <div class="level-btn" data-level="1">1</div>
@@ -498,6 +500,36 @@ document.getElementById('levelRow').addEventListener('click', (e) => {
   btn.classList.add('active');
   selectedLevel = parseInt(btn.dataset.level, 10);
 });
+document.getElementById('useGpsBtn').addEventListener('click', () => {
+  const hint = document.getElementById('gpsHint');
+  const btn = document.getElementById('useGpsBtn');
+  if (!('geolocation' in navigator)){
+    hint.textContent = 'Este navegador no soporta geolocalización.';
+    return;
+  }
+  btn.disabled = true;
+  hint.textContent = 'Obteniendo ubicación...';
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      document.getElementById('lat').value = pos.coords.latitude;
+      document.getElementById('lng').value = pos.coords.longitude;
+      hint.textContent = `Ubicación cargada (precisión ~${Math.round(pos.coords.accuracy)} m).`;
+      btn.disabled = false;
+      clearStaleStatus();
+    },
+    (err) => {
+      const messages = {
+        1: 'Permiso denegado. Habilitá la ubicación para este sitio en tu navegador.',
+        2: 'No se pudo determinar la ubicación (sin señal GPS/red).',
+        3: 'Se agotó el tiempo esperando la ubicación. Probá de nuevo.'
+      };
+      hint.textContent = messages[err.code] || 'No se pudo obtener la ubicación.';
+      btn.disabled = false;
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+  );
+});
+
 ['incidentName','lat','lng','desc'].forEach(id => {
   document.getElementById(id).addEventListener('input', clearStaleStatus);
 });
