@@ -136,7 +136,11 @@
     <div class="sec-label">Incidente</div>
     <div class="field">
       <label>Nombre del incidente</label>
-      <input type="text" id="incidentName" placeholder="North Perimeter Breach - Camera 23">
+      <div class="add-row">
+        <input type="text" id="incidentName" placeholder="North Perimeter Breach - Camera 23">
+        <button class="ghost-btn" id="refreshNameBtn" type="button" title="Regenerar con la hora actual">🔄</button>
+      </div>
+      <div class="field-hint">Se arma solo como "Organización-AAAAMMDD-HHMMSS" al elegir organización. Podés editarlo, o tocar 🔄 para refrescar la hora antes de despachar.</div>
     </div>
     <div class="coords-panel">
       <div class="field">
@@ -358,9 +362,24 @@ function renderSelectors(){
   if (missing.length) hint.querySelector('span').textContent = `Falta cargar una ${missing[0]} en Configuración, más abajo.`;
 }
 
+function formatTimestamp(d){
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+}
+function generateIncidentName(){
+  const org = currentOrg();
+  const base = org ? org.name.trim().replace(/\s+/g, '-') : 'Alert';
+  return `${base}-${formatTimestamp(new Date())}`;
+}
+document.getElementById('refreshNameBtn').addEventListener('click', () => {
+  document.getElementById('incidentName').value = generateIncidentName();
+  clearStaleStatus();
+});
+
 document.getElementById('orgSelect').addEventListener('change', (e) => {
   activeOrgId = e.target.value; activeProjectId = null; activeWorkflowId = null;
   renderSelectors(); renderSettingsLists(); clearStaleStatus();
+  document.getElementById('incidentName').value = generateIncidentName();
 });
 document.getElementById('projectSelect').addEventListener('change', (e) => {
   activeProjectId = e.target.value; activeWorkflowId = null;
@@ -648,6 +667,7 @@ document.getElementById('castrSaveBtn').addEventListener('click', async () => {
   if (ok){
     await loadAll();
     await loadVideoSetting();
+    document.getElementById('incidentName').value = generateIncidentName();
   }
 })();
 </script>
